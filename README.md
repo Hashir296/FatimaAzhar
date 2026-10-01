@@ -15,7 +15,7 @@ Open http://localhost:5175
 
 ## Vercel
 
-Import the GitHub repo. The build settings are in `vercel.json`. In the Vercel project, add `MONGO_URI` (the Atlas connection string). Add `SMTP_*`, `MAIL_FROM`, `MAIL_TO`, `GHL_*`, and `SLACK_WEBHOOK_URL` when you have them. Do not commit `server/.env`.
+The repo deploys as two services in `vercel.json`: the Vite site (`client`) and the Express API (`server`). Public pages stay on the site. Anything under `/api` goes to Express. In the Vercel project, add `MONGO_URI` from `server/.env`. Add `SMTP_*`, `MAIL_FROM`, `MAIL_TO`, `GHL_*`, and `SLACK_WEBHOOK_URL` when you have them. Do not commit `server/.env`.
 
 The API listens on http://localhost:5001. A meeting is saved locally first, then the same request is sent three ways: a confirmation email to the client, a contact in GoHighLevel, and a message in Slack. Until the values in `server/.env` are filled in, the form still succeeds.
 
