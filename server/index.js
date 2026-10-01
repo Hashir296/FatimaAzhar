@@ -5,18 +5,40 @@ const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
 
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+if (!process.env.VERCEL) {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+}
 
 require("dotenv").config({ path: path.join(__dirname, ".env") });
 
 const PORT = Number(process.env.PORT) || 5001;
-const DATA_FILE = path.join(__dirname, "data", "submissions.json");
+const DATA_FILE = process.env.VERCEL
+  ? path.join("/tmp", "submissions.json")
+  : path.join(__dirname, "data", "submissions.json");
 
 mongoose.set("bufferCommands", false);
 
 const app = express();
 app.use(cors());
 app.use(express.json({ limit: "100kb" }));
+
+if (process.env.VERCEL) {
+  app.use((req, _res, next) => {
+    const qIndex = req.url.indexOf("?");
+    const pathname = qIndex === -1 ? req.url : req.url.slice(0, qIndex);
+    const search = qIndex === -1 ? "" : req.url.slice(qIndex);
+    if (!pathname.startsWith("/api")) {
+      const suffix = pathname === "/" ? "" : pathname;
+      req.url = `/api${suffix}${search}`;
+    }
+    next();
+  });
+}
+
+app.use(async (_req, _res, next) => {
+  await ensureMongo();
+  next();
+});
 
 const leadSchema = new mongoose.Schema(
   {
@@ -272,7 +294,7 @@ app.use("/api", (_req, res) => {
 });
 
 const dist = path.join(__dirname, "..", "client", "dist");
-if (fs.existsSync(dist)) {
+if (!process.env.VERCEL && fs.existsSync(dist)) {
   app.use(express.static(dist));
   app.get("*", (_req, res) => {
     res.sendFile(path.join(dist, "index.html"));
@@ -287,18 +309,33 @@ app.use((err, _req, res, _next) => {
   return res.status(500).json({ ok: false, message: "Something went wrong. Please try again." });
 });
 
-async function start() {
-  const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/fatima_azhar";
-  try {
-    await mongoose.connect(uri, { serverSelectionTimeoutMS: 2000 });
-    mongoReady = true;
-    console.log("MongoDB connected:", mongoose.connection.host);
-  } catch {
-    mongoReady = false;
-    await mongoose.disconnect().catch(() => {});
-    console.log("MongoDB not available. Submissions will be saved to server/data/submissions.json");
-  }
+let mongoPromise = null;
 
+function ensureMongo() {
+  if (mongoose.connection.readyState === 1) {
+    mongoReady = true;
+    return Promise.resolve();
+  }
+  if (!mongoPromise) {
+    const uri = process.env.MONGO_URI || "mongodb://127.0.0.1:27017/fatima_azhar";
+    mongoPromise = mongoose
+      .connect(uri, { serverSelectionTimeoutMS: process.env.VERCEL ? 8000 : 2000 })
+      .then(() => {
+        mongoReady = true;
+        console.log("MongoDB connected:", mongoose.connection.host);
+      })
+      .catch(async (err) => {
+        mongoReady = false;
+        mongoPromise = null;
+        await mongoose.disconnect().catch(() => {});
+        console.log("MongoDB not available. Submissions will be saved locally.", err.message);
+      });
+  }
+  return mongoPromise;
+}
+
+async function start() {
+  await ensureMongo();
   const server = app.listen(PORT, () => {
     console.log(`Server running on http://localhost:${PORT}`);
   });
@@ -308,4 +345,8 @@ async function start() {
   });
 }
 
-start();
+if (!process.env.VERCEL) {
+  start();
+}
+
+module.exports = app;

@@ -1,5 +1,6 @@
 node_modules
 dist
 .env
+.vercel
 server/data/submissions.json
 client/public/images/podcast-try.jpg
