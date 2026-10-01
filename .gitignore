@@ -1,0 +1,5 @@
+node_modules
+dist
+.env
+server/data/submissions.json
+client/public/images/podcast-try.jpg
